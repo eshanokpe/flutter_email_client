@@ -308,11 +308,23 @@ class GmailService {
       final isRead = !labels.contains('UNREAD');
       final isStarred = labels.contains('STARRED');
 
-      // Body
+      // Body — preserve HTML for WebView rendering, only strip for plain text
       String body = '';
+      bool isHtml = false;
       if (fullBody) {
-        body = _extractBody(msg.payload) ?? msg.snippet ?? '';
-        if (body.contains('<')) body = _stripHtml(body);
+        // Try HTML first (richer content with images)
+        final htmlBody = _extractBodyByMime(msg.payload, 'text/html');
+        if (htmlBody != null) {
+          body = htmlBody;
+          isHtml = true;
+        } else {
+          // Fall back to plain text
+          body =
+              _extractBodyByMime(msg.payload, 'text/plain') ??
+              msg.snippet ??
+              '';
+          isHtml = false;
+        }
       }
 
       final preview = (msg.snippet ?? '')
@@ -335,6 +347,7 @@ class GmailService {
         recipientEmail: to,
         subject: subject.isEmpty ? '(no subject)' : subject,
         body: fullBody ? body : '',
+        isHtml: fullBody ? isHtml : false,
         preview: preview,
         timestamp: timestamp,
         isRead: isRead,
@@ -347,38 +360,31 @@ class GmailService {
     }
   }
 
-  /// Recursively extract the best body part (plain or html).
-  String? _extractBody(gmail.MessagePart? part) {
+  /// Extract a specific MIME type body part recursively.
+  String? _extractBodyByMime(gmail.MessagePart? part, String mimeType) {
     if (part == null) return null;
 
     final mime = part.mimeType ?? '';
 
-    // Leaf node with data
+    // Leaf node — exact MIME match
     if (part.body?.data != null && part.parts == null) {
-      if (mime == 'text/plain' || mime == 'text/html') {
+      if (mime == mimeType) {
         return _decodeBase64(part.body!.data!);
       }
+      return null;
     }
 
-    // Prefer text/plain in multipart
+    // Search children
     if (part.parts != null) {
-      final plain = part.parts!
-          .where((p) => p.mimeType == 'text/plain')
-          .map((p) => p.body?.data)
-          .whereType<String>()
-          .firstOrNull;
-      if (plain != null) return _decodeBase64(plain);
-
-      final html = part.parts!
-          .where((p) => p.mimeType == 'text/html')
-          .map((p) => p.body?.data)
-          .whereType<String>()
-          .firstOrNull;
-      if (html != null) return _decodeBase64(html);
-
+      // Direct match among children first
+      for (final child in part.parts!) {
+        if ((child.mimeType ?? '') == mimeType && child.body?.data != null) {
+          return _decodeBase64(child.body!.data!);
+        }
+      }
       // Recurse into nested multipart
       for (final child in part.parts!) {
-        final result = _extractBody(child);
+        final result = _extractBodyByMime(child, mimeType);
         if (result != null) return result;
       }
     }

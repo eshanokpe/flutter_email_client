@@ -78,7 +78,7 @@ class AuthRepository implements IAuthRepository {
     // First try silent Google sign-in (refreshes token automatically)
     final config = await _gmail.restoreSession();
     if (config != null) {
-      await _storage.save(config); // update stored display info
+      await _storage.save(config);
       return config;
     }
     return null;

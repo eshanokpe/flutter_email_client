@@ -8,7 +8,7 @@ enum AuthMethod { gmailOAuth }
 class EmailConfig extends Equatable {
   final String displayName;
   final String email;
-  final String photoUrl;
+  final String? photoUrl;
   final AuthMethod authMethod;
 
   const EmailConfig({

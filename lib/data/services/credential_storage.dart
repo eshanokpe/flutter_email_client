@@ -1,10 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/email_config.dart';
 
-/// Persists the signed-in user's EmailConfig in the OS keychain.
-/// The OAuth token itself is managed by google_sign_in — we only
-/// store the display info so we can show the correct name/avatar
-/// on the splash screen before the silent sign-in completes.
 class CredentialStorage {
   static const _key = 'mailflow_email_config_v2';
 

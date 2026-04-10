@@ -1,14 +1,17 @@
 import 'package:equatable/equatable.dart';
 
+// In email_model.dart - add photoUrl field
 class EmailModel extends Equatable {
   final String id;
   final String senderId;
   final String senderName;
   final String senderEmail;
   final String senderAvatarColor;
+  final String? senderPhotoUrl; // Add this field
   final String recipientEmail;
   final String subject;
   final String body;
+  final bool isHtml;
   final String preview;
   final DateTime timestamp;
   final bool isRead;
@@ -23,9 +26,11 @@ class EmailModel extends Equatable {
     required this.senderName,
     required this.senderEmail,
     required this.senderAvatarColor,
+    this.senderPhotoUrl, // Add this
     required this.recipientEmail,
     required this.subject,
     required this.body,
+    this.isHtml = false,
     required this.preview,
     required this.timestamp,
     this.isRead = false,
@@ -35,15 +40,18 @@ class EmailModel extends Equatable {
     this.tags = const [],
   });
 
+  // Update copyWith
   EmailModel copyWith({
     String? id,
     String? senderId,
     String? senderName,
     String? senderEmail,
     String? senderAvatarColor,
+    String? senderPhotoUrl,
     String? recipientEmail,
     String? subject,
     String? body,
+    bool? isHtml,
     String? preview,
     DateTime? timestamp,
     bool? isRead,
@@ -58,9 +66,11 @@ class EmailModel extends Equatable {
       senderName: senderName ?? this.senderName,
       senderEmail: senderEmail ?? this.senderEmail,
       senderAvatarColor: senderAvatarColor ?? this.senderAvatarColor,
+      senderPhotoUrl: senderPhotoUrl ?? this.senderPhotoUrl,
       recipientEmail: recipientEmail ?? this.recipientEmail,
       subject: subject ?? this.subject,
       body: body ?? this.body,
+      isHtml: isHtml ?? this.isHtml,
       preview: preview ?? this.preview,
       timestamp: timestamp ?? this.timestamp,
       isRead: isRead ?? this.isRead,
@@ -77,9 +87,12 @@ class EmailModel extends Equatable {
     senderId,
     senderName,
     senderEmail,
+    senderAvatarColor,
+    senderPhotoUrl,
     recipientEmail,
     subject,
     body,
+    isHtml,
     preview,
     timestamp,
     isRead,

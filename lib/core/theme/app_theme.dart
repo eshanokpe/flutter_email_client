@@ -2,20 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Brand Colors — light palette
-  static const Color primary = Color(0xFFFFFFFF); // page background
-  static const Color secondary = Color(0xFFF6F8FC); // drawer / secondary bg
-  static const Color surface = Color(0xFFF1F4F9); // cards / input fills
-  static const Color surfaceVariant = Color(0xFFE8EDF5); // chips / tags
-  static const Color highlight = Color(0xFFD93025); // accent red (Gmail-ish)
-  static const Color accent = Color(0xFF1A73E8); // links / secondary accent
-  static const Color onSurface = Color(0xFF1F1F1F); // primary text
-  static const Color onSurfaceMuted = Color(0xFF6B7280); // secondary text
-  static const Color divider = Color(0xFFE5E9F0); // dividers / borders
-  static const Color unreadDot = Color(0xFF1A73E8); // unread indicator
-  static const Color successGreen = Color(0xFF188038); // success states
-  static const Color warningAmber = Color(0xFFF29900); // warnings / stars
-  static const Color errorRed = Color(0xFFD93025); // errors
+  // Gmail exact colors
+  static const Color gmailRed = Color(0xFFEA4335);
+  static const Color gmailBlue = Color(0xFF1A73E8);
+  static const Color gmailGreen = Color(0xFF34A853);
+  static const Color gmailYellow = Color(0xFFFBBC05);
+
+  static const Color primary = Color(0xFFFFFFFF);
+  static const Color secondary = Color(0xFFF6F8FC); // drawer bg
+  static const Color surface = Color(0xFFF1F3F4); // search bar / chips
+  static const Color surfaceVariant = Color(0xFFE8EAED);
+  static const Color highlight = gmailRed;
+  static const Color accent = gmailBlue;
+  static const Color onSurface = Color(0xFF202124); // Gmail body text
+  static const Color onSurfaceMuted = Color(0xFF5F6368); // Gmail secondary text
+  static const Color divider = Color(0xFFE0E0E0);
+  static const Color unreadDot = gmailBlue;
+  static const Color unreadBg = Color(0xFFF2F6FC); // unread row tint
+  static const Color successGreen = gmailGreen;
+  static const Color warningAmber = gmailYellow;
+  static const Color errorRed = gmailRed;
+  static const Color starColor = Color(0xFFF4B400); // Gmail star gold
 
   static ThemeData get lightTheme {
     return ThemeData(
@@ -23,126 +30,130 @@ class AppTheme {
       brightness: Brightness.light,
       scaffoldBackgroundColor: primary,
       colorScheme: const ColorScheme.light(
-        primary: highlight,
-        secondary: accent,
+        primary: gmailBlue,
+        secondary: gmailRed,
         surface: surface,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
         onSurface: onSurface,
         error: errorRed,
       ),
-      textTheme: GoogleFonts.dmSansTextTheme(ThemeData.light().textTheme)
-          .copyWith(
-            displayLarge: GoogleFonts.dmSans(
-              fontSize: 32,
-              fontWeight: FontWeight.w700,
-              color: onSurface,
-              letterSpacing: -0.5,
-            ),
-            displayMedium: GoogleFonts.dmSans(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: onSurface,
-            ),
-            titleLarge: GoogleFonts.dmSans(
+      textTheme:
+          GoogleFonts.robotoTextTheme(
+            // Gmail uses Roboto
+            ThemeData.light().textTheme,
+          ).copyWith(
+            titleLarge: GoogleFonts.roboto(
               fontSize: 18,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               color: onSurface,
             ),
-            titleMedium: GoogleFonts.dmSans(
+            titleMedium: GoogleFonts.roboto(
               fontSize: 15,
               fontWeight: FontWeight.w500,
               color: onSurface,
             ),
-            bodyLarge: GoogleFonts.dmSans(
-              fontSize: 15,
+            bodyLarge: GoogleFonts.roboto(
+              fontSize: 14,
               fontWeight: FontWeight.w400,
               color: onSurface,
             ),
-            bodyMedium: GoogleFonts.dmSans(
+            bodyMedium: GoogleFonts.roboto(
               fontSize: 13,
               fontWeight: FontWeight.w400,
               color: onSurfaceMuted,
             ),
-            labelLarge: GoogleFonts.dmSans(
+            labelLarge: GoogleFonts.roboto(
               fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+              fontWeight: FontWeight.w500,
               color: onSurface,
             ),
           ),
       appBarTheme: AppBarTheme(
         backgroundColor: primary,
         elevation: 0,
-        scrolledUnderElevation: 0.5,
+        scrolledUnderElevation: 1,
         shadowColor: divider,
-        titleTextStyle: GoogleFonts.dmSans(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: GoogleFonts.roboto(
+          fontSize: 20,
+          fontWeight: FontWeight.w400,
           color: onSurface,
         ),
-        iconTheme: const IconThemeData(color: onSurface),
-        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: onSurfaceMuted),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surface,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: divider, width: 1),
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: divider, width: 1),
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: accent, width: 2),
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: gmailBlue, width: 2),
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: errorRed, width: 1),
-        ),
-        hintStyle: GoogleFonts.dmSans(color: onSurfaceMuted, fontSize: 14),
-        labelStyle: GoogleFonts.dmSans(color: onSurfaceMuted, fontSize: 14),
+        hintStyle: GoogleFonts.roboto(color: onSurfaceMuted, fontSize: 14),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
-          vertical: 14,
+          vertical: 12,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: highlight,
+          backgroundColor: gmailBlue,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          textStyle: GoogleFonts.dmSans(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          textStyle: GoogleFonts.roboto(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ),
       cardTheme: CardThemeData(
         color: primary,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: divider, width: 0.5),
-        ),
+        margin: EdgeInsets.zero,
+        shape: const RoundedRectangleBorder(),
       ),
       dividerTheme: const DividerThemeData(color: divider, thickness: 0.5),
       drawerTheme: const DrawerThemeData(
         backgroundColor: secondary,
         elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+          ),
+        ),
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: primary,
+        foregroundColor: onSurface,
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: onSurface,
-        contentTextStyle: GoogleFonts.dmSans(color: Colors.white),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: const Color(0xFF323232),
+        contentTextStyle: GoogleFonts.roboto(color: Colors.white, fontSize: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         behavior: SnackBarBehavior.floating,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: surface,
+        selectedColor: const Color(0xFFD3E3FD),
+        labelStyle: GoogleFonts.roboto(fontSize: 13, color: onSurface),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        shape: const StadiumBorder(),
+        side: BorderSide.none,
       ),
     );
   }

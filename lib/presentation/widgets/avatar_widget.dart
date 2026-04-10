@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_theme.dart';
 
 class SenderAvatar extends StatelessWidget {
   final String name;
+  final String email;
+  final String? photoUrl;
   final String colorHex;
   final bool isRead;
   final double radius;
@@ -10,9 +13,11 @@ class SenderAvatar extends StatelessWidget {
   const SenderAvatar({
     super.key,
     required this.name,
+    required this.email,
+    this.photoUrl,
     required this.colorHex,
     this.isRead = true,
-    this.radius = 22,
+    this.radius = 20,
   });
 
   Color _parseColor(String hex) {
@@ -22,51 +27,55 @@ class SenderAvatar extends StatelessWidget {
         return Color(int.parse('FF$clean', radix: 16));
       }
     } catch (_) {}
-    return AppTheme.highlight;
+    return AppTheme.gmailBlue;
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = _parseColor(colorHex);
-    final initials = _getInitials(name);
-
-    return Stack(
-      children: [
-        CircleAvatar(
-          radius: radius,
-          backgroundColor: color.withOpacity(0.85),
-          child: Text(
-            initials,
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: radius * 0.6,
-              letterSpacing: -0.5,
-            ),
+    // If we have a photo URL, show the actual image
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundImage: CachedNetworkImageProvider(photoUrl!),
+        onBackgroundImageError: (_, __) {},
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.grey[200],
           ),
-        ),
-        if (!isRead)
-          Positioned(
-            right: 0,
-            top: 0,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: AppTheme.unreadDot,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.primary, width: 1.5),
+          child: Center(
+            child: Text(
+              _initials(name),
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: radius * 0.58,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
-      ],
-    );
-  }
+        ),
+      );
+    }
 
-  String _getInitials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
+    // Fallback to colored avatar with initials
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: _parseColor(colorHex),
+      child: Text(
+        _initials(name),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: radius * 0.58,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
   }
 }
