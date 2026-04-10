@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
+import 'package:googleapis/people/v1.dart' as people;
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
 import 'package:uuid/uuid.dart';
@@ -11,14 +12,14 @@ import '../../core/constants/app_constants.dart';
 
 const _uuid = Uuid();
 
-// Gmail OAuth scopes needed
-const _scopes = [
-  gmail.GmailApi.mailGoogleComScope, // full access — read, send, delete, labels
+final _scopes = [
+  gmail.GmailApi.mailGoogleComScope,
+  'https://www.googleapis.com/auth/contacts.readonly',
+  'https://www.googleapis.com/auth/userinfo.profile',
 ];
 
 final _googleSignIn = GoogleSignIn(scopes: _scopes);
 
-// ─── Auth client that injects Google OAuth headers into every request ─────────
 class _GoogleAuthClient extends http.BaseClient {
   final Map<String, String> _headers;
   final http.Client _inner = http.Client();
@@ -38,7 +39,6 @@ class _GoogleAuthClient extends http.BaseClient {
   }
 }
 
-// ─── Folder → Gmail label mapping ────────────────────────────────────────────
 String _folderToLabel(String folder) {
   switch (folder) {
     case MailFolder.inbox:
@@ -83,30 +83,21 @@ String _avatarColor(String email) {
   return palette[code % palette.length];
 }
 
-String _stripHtml(String raw) {
-  try {
-    return html_parser.parse(raw).body?.text ?? raw;
-  } catch (_) {
-    return raw.replaceAll(RegExp(r'<[^>]+>'), ' ');
-  }
-}
-
-// ─── Main service ─────────────────────────────────────────────────────────────
 class GmailService {
   gmail.GmailApi? _api;
+  people.PeopleServiceApi? _peopleApi;
   GoogleSignInAccount? _account;
+  final Map<String, String?> _photoCache = {};
+  final Map<String, Future<String?>> _pendingPhotoFetches = {};
 
   // ── Sign-in ────────────────────────────────────────────────────────────────
 
-  /// Opens the Google account picker and returns an EmailConfig on success.
   Future<EmailConfig> signIn() async {
     try {
       final account = await _googleSignIn.signIn();
       if (account == null) throw const GmailException('Sign-in cancelled');
-
       _account = account;
-      _api = await _buildApi(account);
-
+      await _buildApis(account);
       return EmailConfig(
         displayName: account.displayName ?? account.email,
         email: account.email,
@@ -118,15 +109,36 @@ class GmailService {
     }
   }
 
-  /// Silently restores a previous session (no UI shown).
+  // Add new account with force account picker
+  Future<EmailConfig> addNewAccount() async {
+    try {
+      // Sign out current account to force account picker
+      await _googleSignIn.signOut();
+
+      // Sign in again with account picker
+      final account = await _googleSignIn.signIn();
+      if (account == null) throw const GmailException('Sign-in cancelled');
+
+      _account = account;
+      await _buildApis(account);
+
+      return EmailConfig(
+        displayName: account.displayName ?? account.email,
+        email: account.email,
+        photoUrl: account.photoUrl ?? '',
+      );
+    } catch (e) {
+      if (e is GmailException) rethrow;
+      throw GmailException('Failed to add account: $e');
+    }
+  }
+
   Future<EmailConfig?> restoreSession() async {
     try {
       final account = await _googleSignIn.signInSilently();
       if (account == null) return null;
-
       _account = account;
-      _api = await _buildApi(account);
-
+      await _buildApis(account);
       return EmailConfig(
         displayName: account.displayName ?? account.email,
         email: account.email,
@@ -140,7 +152,77 @@ class GmailService {
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     _api = null;
+    _peopleApi = null;
     _account = null;
+    _photoCache.clear();
+    _pendingPhotoFetches.clear();
+  }
+
+  // ── Profile photo fetching ─────────────────────────────────────────────────
+
+  Future<String?> fetchSenderPhoto(String email) async {
+    if (email.isEmpty) return null;
+    if (_photoCache.containsKey(email)) return _photoCache[email];
+    if (_pendingPhotoFetches.containsKey(email)) {
+      return _pendingPhotoFetches[email];
+    }
+
+    final future = _fetchGoogleProfilePhoto(email);
+    _pendingPhotoFetches[email] = future;
+    try {
+      final result = await future;
+      _photoCache[email] = result;
+      return result;
+    } finally {
+      _pendingPhotoFetches.remove(email);
+    }
+  }
+
+  Future<String?> _fetchGoogleProfilePhoto(String email) async {
+    if (_peopleApi == null) return null;
+    try {
+      // Own profile
+      if (email == _account?.email) {
+        final ownProfile = await _peopleApi!.people.get(
+          'people/me',
+          personFields: 'photos',
+        );
+        final url = ownProfile.photos?.firstOrNull?.url;
+        if (url != null && url.isNotEmpty) {
+          return '${url.split('?').first}?sz=200';
+        }
+      }
+
+      // Contacts / directory
+      final response = await _peopleApi!.people.searchContacts(
+        query: email,
+        readMask: 'photos,emailAddresses',
+        pageSize: 1,
+        sources: const [
+          'READ_SOURCE_TYPE_CONTACT',
+          'READ_SOURCE_TYPE_DIRECTORY',
+          'READ_SOURCE_TYPE_DOMAIN_CONTACT',
+        ],
+      );
+
+      final person = response.results?.firstOrNull?.person;
+      if (person != null) {
+        final hasMatch =
+            person.emailAddresses?.any(
+              (e) => e.value?.toLowerCase() == email.toLowerCase(),
+            ) ??
+            false;
+        if (hasMatch) {
+          final url = person.photos?.firstOrNull?.url;
+          if (url != null && url.isNotEmpty) {
+            return '${url.split('?').first}?sz=200';
+          }
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   // ── Fetch emails ───────────────────────────────────────────────────────────
@@ -152,8 +234,6 @@ class GmailService {
     final api = _requireApi();
     try {
       final label = _folderToLabel(folder);
-
-      // List message IDs
       final listResponse = await api.users.messages.list(
         'me',
         labelIds: [label],
@@ -163,7 +243,6 @@ class GmailService {
       final messages = listResponse.messages ?? [];
       if (messages.isEmpty) return [];
 
-      // Fetch each message in parallel (metadata + snippet)
       final futures = messages.map(
         (m) => api.users.messages.get(
           'me',
@@ -174,24 +253,38 @@ class GmailService {
       );
 
       final full = await Future.wait(futures);
-      return full
+      final emails = full
           .map((m) => _messageToModel(m, folder))
           .whereType<EmailModel>()
           .toList();
+
+      // Kick off background photo loading
+      _prefetchPhotos(emails);
+
+      return emails;
     } catch (e) {
       if (e is GmailException) rethrow;
       throw GmailException('Failed to fetch emails: $e');
     }
   }
 
-  /// Fetch full message body by ID.
+  void _prefetchPhotos(List<EmailModel> emails) {
+    final unique = emails.map((e) => e.senderEmail).toSet();
+    for (final email in unique) {
+      fetchSenderPhoto(email).catchError((_) => null);
+    }
+  }
+
   Future<EmailModel?> getEmailById(String id) async {
     final api = _requireApi();
     try {
-      // Strip the uuid suffix we appended
       final gmailId = id.contains('-') ? id.split('-').first : id;
       final msg = await api.users.messages.get('me', gmailId, format: 'full');
-      return _messageToModel(msg, MailFolder.inbox, fullBody: true);
+      final email = _messageToModel(msg, MailFolder.inbox, fullBody: true);
+      if (email == null) return null;
+
+      final photo = await fetchSenderPhoto(email.senderEmail);
+      return photo != null ? email.copyWith(senderPhotoUrl: photo) : email;
     } catch (e) {
       throw GmailException('Failed to fetch email: $e');
     }
@@ -216,35 +309,31 @@ class GmailService {
     }
   }
 
-  // ── Send ───────────────────────────────────────────────────────────────────
-
   Future<void> sendEmail(ComposeEmailModel email) async {
     final api = _requireApi();
     final account = _account!;
-
     try {
-      // Build RFC 2822 message
-      final rawMessage = _buildRawEmail(
+      final raw = _buildRawEmail(
         from: '${account.displayName ?? account.email} <${account.email}>',
         to: email.to,
         subject: email.subject,
         body: email.body,
       );
-
-      await api.users.messages.send(gmail.Message(raw: rawMessage), 'me');
+      await api.users.messages.send(gmail.Message(raw: raw), 'me');
     } catch (e) {
       throw GmailException('Failed to send email: $e');
     }
   }
 
-  // ── Private helpers ────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
-  Future<gmail.GmailApi> _buildApi(GoogleSignInAccount account) async {
+  Future<void> _buildApis(GoogleSignInAccount account) async {
     final auth = await account.authentication;
     final client = _GoogleAuthClient({
       'Authorization': 'Bearer ${auth.accessToken}',
     });
-    return gmail.GmailApi(client);
+    _api = gmail.GmailApi(client);
+    _peopleApi = people.PeopleServiceApi(client);
   }
 
   gmail.GmailApi _requireApi() {
@@ -280,7 +369,6 @@ class GmailService {
   }) {
     try {
       final headers = msg.payload?.headers ?? [];
-
       String header(String name) =>
           headers
               .firstWhere(
@@ -295,7 +383,6 @@ class GmailService {
       final dateStr = header('Date');
       final to = header('To');
 
-      // Parse "Display Name <email@domain.com>" or plain email
       final nameMatch = RegExp(r'^(.+?)\s*<(.+?)>$').firstMatch(from);
       final senderName = nameMatch?.group(1)?.trim() ?? from;
       final senderEmail = nameMatch?.group(2)?.trim() ?? from;
@@ -303,27 +390,22 @@ class GmailService {
       final timestamp = dateStr.isNotEmpty
           ? _parseDate(dateStr)
           : DateTime.now();
-
       final labels = msg.labelIds ?? [];
       final isRead = !labels.contains('UNREAD');
       final isStarred = labels.contains('STARRED');
 
-      // Body — preserve HTML for WebView rendering, only strip for plain text
       String body = '';
       bool isHtml = false;
       if (fullBody) {
-        // Try HTML first (richer content with images)
         final htmlBody = _extractBodyByMime(msg.payload, 'text/html');
         if (htmlBody != null) {
           body = htmlBody;
           isHtml = true;
         } else {
-          // Fall back to plain text
           body =
               _extractBodyByMime(msg.payload, 'text/plain') ??
               msg.snippet ??
               '';
-          isHtml = false;
         }
       }
 
@@ -336,13 +418,12 @@ class GmailService {
           msg.payload?.parts?.any((p) => p.filename?.isNotEmpty == true) ??
           false;
 
-      final id = '${msg.id}-${_uuid.v4().substring(0, 8)}';
-
       return EmailModel(
-        id: id,
+        id: '${msg.id}-${_uuid.v4().substring(0, 8)}',
         senderId: senderEmail,
         senderName: senderName.isEmpty ? senderEmail : senderName,
         senderEmail: senderEmail,
+        senderPhotoUrl: _photoCache[senderEmail],
         senderAvatarColor: _avatarColor(senderEmail),
         recipientEmail: to,
         subject: subject.isEmpty ? '(no subject)' : subject,
@@ -360,29 +441,19 @@ class GmailService {
     }
   }
 
-  /// Extract a specific MIME type body part recursively.
   String? _extractBodyByMime(gmail.MessagePart? part, String mimeType) {
     if (part == null) return null;
-
     final mime = part.mimeType ?? '';
-
-    // Leaf node — exact MIME match
     if (part.body?.data != null && part.parts == null) {
-      if (mime == mimeType) {
-        return _decodeBase64(part.body!.data!);
-      }
+      if (mime == mimeType) return _decodeBase64(part.body!.data!);
       return null;
     }
-
-    // Search children
     if (part.parts != null) {
-      // Direct match among children first
       for (final child in part.parts!) {
         if ((child.mimeType ?? '') == mimeType && child.body?.data != null) {
           return _decodeBase64(child.body!.data!);
         }
       }
-      // Recurse into nested multipart
       for (final child in part.parts!) {
         final result = _extractBodyByMime(child, mimeType);
         if (result != null) return result;
@@ -393,7 +464,6 @@ class GmailService {
 
   String _decodeBase64(String data) {
     try {
-      // Gmail uses URL-safe base64
       final normalized = data.replaceAll('-', '+').replaceAll('_', '/');
       return utf8.decode(base64.decode(normalized));
     } catch (_) {
@@ -405,9 +475,7 @@ class GmailService {
     try {
       return DateTime.parse(dateStr);
     } catch (_) {
-      // RFC 2822 dates like "Mon, 01 Jan 2024 12:00:00 +0000"
       try {
-        // Try stripping weekday prefix
         final clean = dateStr.replaceFirst(RegExp(r'^\w+,\s*'), '').trim();
         return DateTime.parse(clean);
       } catch (_) {
@@ -416,7 +484,6 @@ class GmailService {
     }
   }
 
-  /// Build a base64url-encoded RFC 2822 email string.
   String _buildRawEmail({
     required String from,
     required String to,
@@ -433,7 +500,6 @@ class GmailService {
       '',
       body,
     ].join('\r\n');
-
     return base64Url.encode(utf8.encode(message));
   }
 }
@@ -441,7 +507,6 @@ class GmailService {
 class GmailException implements Exception {
   final String message;
   const GmailException(this.message);
-
   @override
   String toString() => 'GmailException: $message';
 }

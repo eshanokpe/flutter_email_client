@@ -50,8 +50,14 @@ class EmailRepository implements IEmailRepository {
 
 abstract class IAuthRepository {
   Future<EmailConfig> login();
+  Future<EmailConfig> addNewAccount();
   Future<void> logout();
   Future<EmailConfig?> restoreSession();
+  Future<List<EmailConfig>> getSavedAccounts();
+  Future<void> saveAccounts(List<EmailConfig> accounts);
+  Future<void> saveLastActiveAccount(EmailConfig config);
+  Future<EmailConfig?> getLastActiveAccount();
+  Future<void> removeAccount(EmailConfig config);
 }
 
 class AuthRepository implements IAuthRepository {
@@ -64,6 +70,15 @@ class AuthRepository implements IAuthRepository {
   Future<EmailConfig> login() async {
     final config = await _gmail.signIn();
     await _storage.save(config);
+    await _storage.saveLastActiveAccount(config);
+    return config;
+  }
+
+  @override
+  Future<EmailConfig> addNewAccount() async {
+    final config = await _gmail.addNewAccount();
+    await _storage.save(config);
+    await _storage.saveLastActiveAccount(config);
     return config;
   }
 
@@ -75,12 +90,36 @@ class AuthRepository implements IAuthRepository {
 
   @override
   Future<EmailConfig?> restoreSession() async {
-    // First try silent Google sign-in (refreshes token automatically)
     final config = await _gmail.restoreSession();
     if (config != null) {
       await _storage.save(config);
       return config;
     }
     return null;
+  }
+
+  @override
+  Future<List<EmailConfig>> getSavedAccounts() async {
+    return await _storage.getAccounts();
+  }
+
+  @override
+  Future<void> saveAccounts(List<EmailConfig> accounts) async {
+    await _storage.saveAccounts(accounts);
+  }
+
+  @override
+  Future<void> saveLastActiveAccount(EmailConfig config) async {
+    await _storage.saveLastActiveAccount(config);
+  }
+
+  @override
+  Future<EmailConfig?> getLastActiveAccount() async {
+    return await _storage.getLastActiveAccount();
+  }
+
+  @override
+  Future<void> removeAccount(EmailConfig config) async {
+    await _storage.removeAccount(config);
   }
 }

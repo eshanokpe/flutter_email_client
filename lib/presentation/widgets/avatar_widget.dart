@@ -7,7 +7,6 @@ class SenderAvatar extends StatelessWidget {
   final String email;
   final String? photoUrl;
   final String colorHex;
-  final bool isRead;
   final double radius;
 
   const SenderAvatar({
@@ -16,8 +15,7 @@ class SenderAvatar extends StatelessWidget {
     required this.email,
     this.photoUrl,
     required this.colorHex,
-    this.isRead = true,
-    this.radius = 20,
+    this.radius = 18,
   });
 
   Color _parseColor(String hex) {
@@ -39,32 +37,22 @@ class SenderAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // If we have a photo URL, show the actual image
+    // Show real profile photo when available
     if (photoUrl != null && photoUrl!.isNotEmpty) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundImage: CachedNetworkImageProvider(photoUrl!),
-        onBackgroundImageError: (_, __) {},
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.grey[200],
-          ),
-          child: Center(
-            child: Text(
-              _initials(name),
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: radius * 0.58,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ),
+      return CachedNetworkImage(
+        imageUrl: photoUrl!,
+        imageBuilder: (context, imageProvider) =>
+            CircleAvatar(radius: radius, backgroundImage: imageProvider),
+        placeholder: (context, url) => _initialsAvatar(),
+        errorWidget: (context, url, error) => _initialsAvatar(),
+        cacheKey: photoUrl,
       );
     }
 
-    // Fallback to colored avatar with initials
+    return _initialsAvatar();
+  }
+
+  Widget _initialsAvatar() {
     return CircleAvatar(
       radius: radius,
       backgroundColor: _parseColor(colorHex),
@@ -72,7 +60,7 @@ class SenderAvatar extends StatelessWidget {
         _initials(name),
         style: TextStyle(
           color: Colors.white,
-          fontSize: radius * 0.58,
+          fontSize: radius * 0.65,
           fontWeight: FontWeight.w500,
         ),
       ),
